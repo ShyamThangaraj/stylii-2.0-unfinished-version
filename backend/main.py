@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from routes.gemini import router as gemini_router
+from routes.nano_banana import router as nano_banana_router
 
 # Load environment variables from .env file
 load_dotenv()
@@ -19,6 +20,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(gemini_router)
+app.include_router(nano_banana_router)
 
 @app.get("/")
 async def root():

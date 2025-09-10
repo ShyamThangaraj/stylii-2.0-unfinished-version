@@ -53,6 +53,7 @@ export default function ResultsPage() {
   
   // Get form data from Zustand store
   const { images, budget, notes, selectedProducts, getProductsFromCache, setProductsCache, isGenerating: globalGenerating, setIsGenerating: setGlobalGenerating } = useStyliiStore()
+  const setCompositeImageUrl = useStyliiStore((s) => s.setCompositeImageUrl)
 
   // Helper function to convert File to base64
   const fileToBase64 = (file: File): Promise<string> => {
@@ -125,6 +126,55 @@ export default function ResultsPage() {
       
       // Simulate additional processing time
       await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      // NEW: Generate room visualization via Nano Banana after we have products
+      try {
+        setLoadingStep("Compositing products into your room (AI)...")
+
+        // Use first uploaded image as the room base (already base64 as data URL)
+        const roomBase64DataUrl = imageBase64s[0]
+        const roomBase64 = roomBase64DataUrl?.startsWith("data:image")
+          ? roomBase64DataUrl.split(",")[1]
+          : roomBase64DataUrl
+
+        // Collect product image URLs (thumbnails) to let backend fetch server-side
+        const productThumbUrls: string[] = (result.recommended_products || [])
+          .map((p: any) => p?.thumbnail)
+          .filter((u: any) => typeof u === "string" && u.length > 0)
+
+        if (roomBase64 && productThumbUrls.length > 0) {
+          const nanoRes = await fetch('http://localhost:8000/api/nano-banana/generate-room-visualization', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              room_image: roomBase64,
+              product_image_urls: productThumbUrls,
+              prompt: 'Place each product realistically in the room, matching perspective, scale, and lighting.'
+            })
+          })
+
+          if (nanoRes.ok) {
+            const nanoData = await nanoRes.json()
+            if (nanoData?.generated_image) {
+              // Turn base64 into object URL for quick preview/logging
+              const bytes = atob(nanoData.generated_image)
+              const buf = new Uint8Array(bytes.length)
+              for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i)
+              const blob = new Blob([buf])
+              const compositeUrl = URL.createObjectURL(blob)
+              console.log("🖼️ Composite ready:", compositeUrl)
+              setCompositeImageUrl(compositeUrl)
+            }
+          } else {
+            const errTxt = await nanoRes.text().catch(() => "")
+            console.warn("⚠️ Nano Banana call failed:", nanoRes.status, errTxt)
+          }
+        } else {
+          console.warn("⚠️ Skipping Nano Banana: missing room image or product thumbnails.")
+        }
+      } catch (e) {
+        console.warn("⚠️ Nano Banana step skipped due to error:", e)
+      }
 
       setLoadingStep("Finalizing your design...")
       await new Promise((resolve) => setTimeout(resolve, 500))

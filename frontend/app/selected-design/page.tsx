@@ -13,7 +13,7 @@ export default function SelectedDesignPage() {
   const styleId = searchParams.get("style") || "modern"
   
   // Get product recommendations from Zustand store
-  const { recommendedProducts, budget } = useStyliiStore()
+  const { recommendedProducts, budget, compositeImageUrl } = useStyliiStore()
 
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -78,9 +78,8 @@ export default function SelectedDesignPage() {
         {/* Main Design Image */}
         <div className="bg-white rounded-3xl overflow-hidden shadow-lg border border-orange-100 mb-8">
           <div className="aspect-[16/10] bg-gray-100 relative">
-            {/* TODO: Replace with actual AI-generated image from backend */}
             <img
-              src={`/abstract-geometric-shapes.png?height=600&width=960&query=${styleId} living room design detailed view`}
+              src={compositeImageUrl || `/abstract-geometric-shapes.png?height=600&width=960&query=${styleId} living room design detailed view`}
               alt={`${styleName} room design`}
               className="w-full h-full object-cover"
             />
