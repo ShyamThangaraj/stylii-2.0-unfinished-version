@@ -198,7 +198,7 @@ def pick_products_with_budget(
     min_reviews: int = 50,
     cap_flex: float = 1.25,
 ) -> List[Dict[str, Any]]:
-    queries = [qr for qr in query_results if qr.get("success") and qr.get("raw_data")]
+    queries = [qr for qr in (query_results or []) if qr.get("success") and qr.get("raw_data")]
     if not queries:
         return []
 

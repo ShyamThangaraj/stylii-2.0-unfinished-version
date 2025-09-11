@@ -13,14 +13,96 @@ export default function SelectedDesignPage() {
   const styleId = searchParams.get("style") || "modern"
   
   // Get product recommendations from Zustand store
-  const { recommendedProducts, budget, compositeImageUrl } = useStyliiStore()
+  const { recommendedProducts, budget, compositeImageUrl, setCompositeImageUrl, images } = useStyliiStore()
 
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false)
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [rateLimitError, setRateLimitError] = useState(false)
+  const [hasAttemptedGeneration, setHasAttemptedGeneration] = useState(false)
 
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Reset generation state when style changes
+  useEffect(() => {
+    setHasAttemptedGeneration(false)
+    setRateLimitError(false)
+    setCompositeImageUrl(undefined) // Clear previous image when style changes
+  }, [styleId, setCompositeImageUrl])
+
+  // Generate composite image if not available
+  useEffect(() => {
+    const generateCompositeImage = async () => {
+      if (!compositeImageUrl && images.length > 0 && recommendedProducts.length > 0 && !isGeneratingImage && !hasAttemptedGeneration && !rateLimitError) {
+        console.log("🎨 Starting image generation...")
+        setIsGeneratingImage(true)
+        setHasAttemptedGeneration(true)
+        
+        try {
+          // Convert room image to base64
+          const roomFile = images[0]
+          const roomBase64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader()
+            reader.onload = () => {
+              const result = reader.result as string
+              // Remove data:image/...;base64, prefix
+              resolve(result.split(',')[1])
+            }
+            reader.readAsDataURL(roomFile)
+          })
+
+          // Collect product image URLs
+          const productThumbUrls: string[] = recommendedProducts
+            .map((p: any) => p?.thumbnail)
+            .filter((u: any) => typeof u === "string" && u.length > 0)
+
+          if (productThumbUrls.length > 0) {
+            const nanoRes = await fetch('http://localhost:8000/api/nano-banana/generate-room-visualization', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                room_image: roomBase64,
+                product_image_urls: productThumbUrls,
+                prompt: `Create a ${styleId} style room design. Place each product realistically in the room, matching perspective, scale, and lighting.`
+              })
+            })
+
+            if (nanoRes.ok) {
+              const nanoData = await nanoRes.json()
+              if (nanoData?.generated_image) {
+                // Convert base64 to object URL
+                const bytes = atob(nanoData.generated_image)
+                const buf = new Uint8Array(bytes.length)
+                for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i)
+                const blob = new Blob([buf])
+                const compositeUrl = URL.createObjectURL(blob)
+                setCompositeImageUrl(compositeUrl)
+              }
+            } else {
+              const errorText = await nanoRes.text()
+              console.error("❌ Nano Banana call failed:", nanoRes.status, errorText)
+              
+              // Handle 429 (rate limit) errors specifically
+              if (nanoRes.status === 500 && errorText.includes("429")) {
+                console.warn("⚠️ Gemini API rate limit reached. Please try again later.")
+                setRateLimitError(true)
+                // Don't retry immediately for rate limit errors
+                setHasAttemptedGeneration(true)
+              }
+            }
+          }
+        } catch (error) {
+          console.error("❌ Error generating composite image:", error)
+        } finally {
+          setIsGeneratingImage(false)
+        }
+      }
+    }
+
+    generateCompositeImage()
+  }, [compositeImageUrl, images, recommendedProducts, styleId, setCompositeImageUrl, hasAttemptedGeneration, rateLimitError])
 
   const handleGenerateVideo = async () => {
     setIsGeneratingVideo(true)
@@ -78,14 +160,49 @@ export default function SelectedDesignPage() {
         {/* Main Design Image */}
         <div className="bg-white rounded-3xl overflow-hidden shadow-lg border border-orange-100 mb-8">
           <div className="aspect-[16/10] bg-gray-100 relative">
-            <img
-              src={compositeImageUrl || `/abstract-geometric-shapes.png?height=600&width=960&query=${styleId} living room design detailed view`}
-              alt={`${styleName} room design`}
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute top-6 left-6 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full">
-              <span className="text-sm font-medium text-gray-700">AI Generated Design</span>
-            </div>
+            {isGeneratingImage ? (
+              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-orange-50 to-amber-50">
+                <div className="text-center">
+                  <div className="animate-spin w-16 h-16 border-4 border-orange-200 border-t-orange-500 rounded-full mx-auto mb-4"></div>
+                  <h3 className="text-xl font-semibold text-gray-800 mb-2">Generating Your Design</h3>
+                  <p className="text-gray-600">Creating a personalized room visualization with AI...</p>
+                </div>
+              </div>
+            ) : rateLimitError ? (
+              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-red-50 to-orange-50">
+                <div className="text-center max-w-md mx-auto px-6">
+                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-2xl">⚠️</span>
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-800 mb-2">API Rate Limit Reached</h3>
+                  <p className="text-gray-600 mb-4">
+                    We've hit the daily limit for AI image generation. Please try again tomorrow or contact support.
+                  </p>
+                  <Button 
+                    onClick={() => {
+                      setRateLimitError(false)
+                      setHasAttemptedGeneration(false)
+                    }}
+                    className="bg-orange-500 hover:bg-orange-600 text-white"
+                  >
+                    Try Again
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <img
+                  src={compositeImageUrl || `/abstract-geometric-shapes.png?height=600&width=960&query=${styleId} living room design detailed view`}
+                  alt={`${styleName} room design`}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute top-6 left-6 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full">
+                  <span className="text-sm font-medium text-gray-700">
+                    {compositeImageUrl ? "AI Generated Design" : "Placeholder Design"}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 

@@ -142,6 +142,10 @@ export default function ResultsPage() {
           .map((p: any) => p?.thumbnail)
           .filter((u: any) => typeof u === "string" && u.length > 0)
 
+        console.log("🔍 Debug - Room image:", roomBase64 ? "✅ Present" : "❌ Missing")
+        console.log("🔍 Debug - Product thumbnails:", productThumbUrls.length > 0 ? `✅ ${productThumbUrls.length} found` : "❌ None found")
+        console.log("🔍 Debug - Product thumbnails URLs:", productThumbUrls)
+
         if (roomBase64 && productThumbUrls.length > 0) {
           const nanoRes = await fetch('http://localhost:8000/api/nano-banana/generate-room-visualization', {
             method: 'POST',
