@@ -13,7 +13,7 @@ export default function SelectedDesignPage() {
   const styleId = searchParams.get("style") || "modern"
   
   // Get product recommendations from Zustand store
-  const { recommendedProducts, budget, compositeImageUrl, setCompositeImageUrl, images } = useStyliiStore()
+  const { recommendedProducts, budget, compositeImageUrl, setCompositeImageUrl, generatedVideoUrl, setGeneratedVideoUrl, images } = useStyliiStore()
 
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false)
   const [isGeneratingImage, setIsGeneratingImage] = useState(false)
@@ -30,7 +30,8 @@ export default function SelectedDesignPage() {
     setHasAttemptedGeneration(false)
     setRateLimitError(false)
     setCompositeImageUrl(undefined) // Clear previous image when style changes
-  }, [styleId, setCompositeImageUrl])
+    setGeneratedVideoUrl(undefined) // Clear previous video when style changes
+  }, [styleId, setCompositeImageUrl, setGeneratedVideoUrl])
 
   // Generate composite image if not available
   useEffect(() => {
@@ -105,15 +106,55 @@ export default function SelectedDesignPage() {
   }, [compositeImageUrl, images, recommendedProducts, styleId, setCompositeImageUrl, hasAttemptedGeneration, rateLimitError])
 
   const handleGenerateVideo = async () => {
-    setIsGeneratingVideo(true)
+    if (!compositeImageUrl || images.length === 0) {
+      alert("Please wait for the image to be generated first")
+      return
+    }
 
-    // TODO: Integrate with Fal AI to generate video
-    // Placeholder for video generation logic
-    setTimeout(() => {
+    setIsGeneratingVideo(true)
+    
+    try {
+      console.log("🎬 Starting video generation...")
+      
+      // Convert room image to base64
+      const roomFile = images[0]
+      const roomBase64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const result = reader.result as string
+          // Remove data:image/...;base64, prefix
+          resolve(result.split(',')[1])
+        }
+        reader.readAsDataURL(roomFile)
+      })
+
+      const videoRes = await fetch('http://localhost:8000/api/video/generate-room-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room_image: roomBase64,
+          style: styleId,
+          prompt: `Create a ${styleId} style room tour video with smooth camera movement showcasing the furniture and decor.`
+        })
+      })
+
+      if (videoRes.ok) {
+        const videoData = await videoRes.json()
+        console.log("✅ Video generated successfully:", videoData)
+        
+        // Set the video URL in the store
+        setGeneratedVideoUrl(`http://localhost:8000${videoData.video_url}`)
+      } else {
+        const errorText = await videoRes.text()
+        console.error("❌ Video generation failed:", videoRes.status, errorText)
+        alert(`Video generation failed: ${errorText}`)
+      }
+    } catch (error) {
+      console.error("❌ Error generating video:", error)
+      alert("Failed to generate video. Please try again.")
+    } finally {
       setIsGeneratingVideo(false)
-      // TODO: Show generated video or redirect to video page
-      alert("Video generation would happen here using Fal AI")
-    }, 3000)
+    }
   }
 
   if (!mounted) {
@@ -189,6 +230,22 @@ export default function SelectedDesignPage() {
                   </Button>
                 </div>
               </div>
+            ) : generatedVideoUrl ? (
+              <>
+                <video
+                  src={generatedVideoUrl}
+                  controls
+                  autoPlay
+                  loop
+                  muted
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute top-6 left-6 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full">
+                  <span className="text-sm font-medium text-gray-700">
+                    🎬 AI Generated Video
+                  </span>
+                </div>
+              </>
             ) : (
               <>
                 <img
@@ -210,11 +267,11 @@ export default function SelectedDesignPage() {
         <div className="flex flex-col sm:flex-row justify-end gap-4 mb-8">
           <Button
             onClick={handleGenerateVideo}
-            disabled={isGeneratingVideo}
-            className="flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-2xl font-medium text-lg sm:w-auto w-full"
+            disabled={isGeneratingVideo || !compositeImageUrl}
+            className="flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-2xl font-medium text-lg sm:w-auto w-full disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Video className="w-5 h-5" />
-            {isGeneratingVideo ? "Generating Video..." : "Generate Video"}
+            {isGeneratingVideo ? "Generating Video..." : generatedVideoUrl ? "Video Generated ✅" : "Generate Video"}
           </Button>
         </div>
 

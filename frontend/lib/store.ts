@@ -19,6 +19,7 @@ interface StyliiStore {
   recommendedProducts: any[]
   amazonSearchQueries: string[]
   compositeImageUrl?: string
+  generatedVideoUrl?: string
   
   // Cache for products by style
   productsCache: Record<string, { products: any[], queries: string[], timestamp: number }>
@@ -36,6 +37,7 @@ interface StyliiStore {
   setRecommendedProducts: (products: any[]) => void
   setAmazonSearchQueries: (queries: string[]) => void
   setCompositeImageUrl: (url?: string) => void
+  setGeneratedVideoUrl: (url?: string) => void
   setProductsCache: (style: string, products: any[], queries: string[]) => void
   getProductsFromCache: (style: string) => { products: any[], queries: string[] } | null
   reset: () => void
@@ -55,6 +57,7 @@ export const useStyliiStore = create<StyliiStore>((set) => ({
   recommendedProducts: [],
   amazonSearchQueries: [],
   compositeImageUrl: undefined,
+  generatedVideoUrl: undefined,
   productsCache: {},
 
   // Actions
@@ -74,6 +77,7 @@ export const useStyliiStore = create<StyliiStore>((set) => ({
   setRecommendedProducts: (recommendedProducts) => set({ recommendedProducts }),
   setAmazonSearchQueries: (amazonSearchQueries) => set({ amazonSearchQueries }),
   setCompositeImageUrl: (compositeImageUrl) => set({ compositeImageUrl }),
+  setGeneratedVideoUrl: (generatedVideoUrl) => set({ generatedVideoUrl }),
   setProductsCache: (style, products, queries) => 
     set((state) => ({
       productsCache: {
@@ -109,6 +113,7 @@ export const useStyliiStore = create<StyliiStore>((set) => ({
       recommendedProducts: [],
       amazonSearchQueries: [],
       compositeImageUrl: undefined,
+      generatedVideoUrl: undefined,
       productsCache: {},
     }),
 }))

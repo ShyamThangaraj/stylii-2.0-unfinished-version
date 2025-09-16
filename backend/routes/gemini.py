@@ -13,65 +13,6 @@ router = APIRouter(prefix="/api/gemini", tags=["gemini"])
 
 # Gemini client will be initialized when needed
 
-def load_test_serpapi_data():
-    """Load test SerpAPI data from serpAPI_test.txt file"""
-    test_file_path = os.path.join(os.path.dirname(__file__), "..", "serpAPI_test.txt")
-    
-    with open(test_file_path, 'r', encoding='utf-8') as f:
-        content = f.read()
-    
-    # Parse the test data structure - return format expected by pick_products_with_budget
-    results = []
-    
-    # Split by query sections
-    query_sections = re.split(r'QUERY \d+:', content)
-    
-    for i, section in enumerate(query_sections[1:], 1):  # Skip first empty section
-        lines = section.strip().split('\n')
-        if not lines:
-            continue
-            
-        # Extract query name from first line
-        query_name = lines[0].strip()
-        
-        # Find the JSON data section
-        json_start = None
-        for j, line in enumerate(lines):
-            if line.strip() == 'Raw SerpAPI Data:':
-                json_start = j + 1
-                break
-        
-        if json_start is None:
-            continue
-            
-        # Extract JSON data
-        json_lines = []
-        brace_count = 0
-        for line in lines[json_start:]:
-            json_lines.append(line)
-            brace_count += line.count('{') - line.count('}')
-            if brace_count == 0 and line.strip().endswith('}'):
-                break
-        
-        try:
-            json_data = json.loads('\n'.join(json_lines))
-            # Format expected by pick_products_with_budget
-            results.append({
-                "query": query_name,
-                "success": True,
-                "raw_data": json_data
-            })
-        except json.JSONDecodeError as e:
-            print(f"⚠️ Failed to parse JSON for query {i}: {e}")
-            # Add a failed entry instead of skipping
-            results.append({
-                "query": query_name,
-                "success": False,
-                "raw_data": None
-            })
-            continue
-    
-    return results
 
 class DesignFormRequest(BaseModel):
     """Request model for design form data from frontend"""
@@ -241,13 +182,32 @@ DO NOT return full URLs or Amazon parameters, only the plain search query text.
         print(f"🛍️  Products: {products_text}")
         print("="*60 + "\n")
         
-        # Use test data instead of SerpAPI to save credits
+        # Use real SerpAPI for production
         try:
-            serpapi_results = load_test_serpapi_data()
-            print(f"📋 Using test SerpAPI data with {len(serpapi_results)} queries")
+            print(f"🔍 Calling SerpAPI with {len(search_queries)} queries...")
+            serpapi_results = []
             
-        except Exception as test_data_error:
-            print(f"⚠️ Failed to load test data: {test_data_error}")
+            for query in search_queries:
+                try:
+                    result = search_amazon_products(query)
+                    serpapi_results.append({
+                        "query": query,
+                        "success": True,
+                        "raw_data": result
+                    })
+                    print(f"✅ SerpAPI success for: {query}")
+                except Exception as query_error:
+                    print(f"⚠️ SerpAPI failed for query '{query}': {query_error}")
+                    serpapi_results.append({
+                        "query": query,
+                        "success": False,
+                        "raw_data": None
+                    })
+            
+            print(f"📋 SerpAPI completed: {len([r for r in serpapi_results if r['success']])} successful, {len([r for r in serpapi_results if not r['success']])} failed")
+            
+        except Exception as serpapi_error:
+            print(f"❌ SerpAPI error: {serpapi_error}")
             import traceback
             traceback.print_exc()
             serpapi_results = None
